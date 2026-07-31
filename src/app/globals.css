@@ -3,6 +3,27 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --rainbow-gradient: linear-gradient(
+    90deg,
+    #ef4444,
+    #f97316,
+    #eab308,
+    #22c55e,
+    #3b82f6,
+    #4f46e5,
+    #8b5cf6
+  );
+}
+
+.rainbow-text {
+  background-image: var(--rainbow-gradient);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+}
+
+.rainbow-bg {
+  background-image: var(--rainbow-gradient);
 }
 
 @theme inline {
