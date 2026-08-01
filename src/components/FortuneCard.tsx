@@ -8,6 +8,7 @@ import {
   saveFortuneDraw,
   type FortuneDraw,
 } from "@/lib/supabase/fortuneDraws";
+import { getAiFortuneMessage } from "@/app/actions/aiFortune";
 
 const LOTTO_COLORS = [
   { max: 10, className: "bg-yellow-400 text-yellow-950" },
@@ -21,10 +22,16 @@ function lottoBallClass(num: number) {
   return LOTTO_COLORS.find((c) => num <= c.max)!.className;
 }
 
-export default function FortuneCard() {
+export default function FortuneCard({
+  userId,
+}: {
+  userId: string | null;
+}) {
   const [flipped, setFlipped] = useState(false);
   const [result, setResult] = useState<FortuneResult | null>(null);
   const [animating, setAnimating] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [isAiGenerated, setIsAiGenerated] = useState(false);
   const [history, setHistory] = useState<FortuneDraw[]>([]);
   const clientIdRef = useRef("");
 
@@ -32,16 +39,36 @@ export default function FortuneCard() {
     const id = getClientId();
     clientIdRef.current = id;
     if (id) {
-      fetchRecentDraws(id).then(setHistory);
+      fetchRecentDraws({ clientId: id, userId }).then(setHistory);
     }
-  }, []);
+  }, [userId]);
 
   const persistDraw = (id: string, next: FortuneResult) => {
-    saveFortuneDraw(id, next).then((saved) => {
+    saveFortuneDraw(id, next, userId).then((saved) => {
       if (saved) {
         setHistory((prev) => [saved, ...prev].slice(0, 5));
       }
     });
+  };
+
+  const reveal = async () => {
+    // Lucky item/color/lotto numbers stay local (fast, free). Only the
+    // fortune message itself is asked from the AI — falls back to the
+    // static message list if OpenRouter isn't configured or fails.
+    const base = generateFortune();
+    setAiLoading(true);
+    const ai = await getAiFortuneMessage();
+    setAiLoading(false);
+
+    const next: FortuneResult = ai.ok
+      ? { ...base, fortune: ai.message }
+      : base;
+
+    setIsAiGenerated(ai.ok);
+    setResult(next);
+    setFlipped(true);
+    window.setTimeout(() => setAnimating(false), 600);
+    if (clientIdRef.current) persistDraw(clientIdRef.current, next);
   };
 
   const handleDraw = () => {
@@ -51,19 +78,9 @@ export default function FortuneCard() {
     if (flipped) {
       // Already showing a result: flip back first, then reveal a new one.
       setFlipped(false);
-      window.setTimeout(() => {
-        const next = generateFortune();
-        setResult(next);
-        setFlipped(true);
-        setAnimating(false);
-        if (clientIdRef.current) persistDraw(clientIdRef.current, next);
-      }, 300);
+      window.setTimeout(reveal, 300);
     } else {
-      const next = generateFortune();
-      setResult(next);
-      setFlipped(true);
-      window.setTimeout(() => setAnimating(false), 600);
-      if (clientIdRef.current) persistDraw(clientIdRef.current, next);
+      reveal();
     }
   };
 
@@ -80,7 +97,11 @@ export default function FortuneCard() {
           <div className="absolute inset-0 [backface-visibility:hidden] rounded-2xl bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-500 shadow-xl flex flex-col items-center justify-center gap-4 text-white border border-white/20">
             <span className="text-6xl">🔮</span>
             <p className="text-lg font-semibold tracking-wide">오늘의 운세</p>
-            <p className="text-sm text-white/80">카드를 눌러 확인해보세요</p>
+            <p className="text-sm text-white/80">
+              {aiLoading
+                ? "AI가 운세를 만드는 중..."
+                : "카드를 눌러 확인해보세요"}
+            </p>
           </div>
 
           {/* Card front */}
@@ -90,7 +111,12 @@ export default function FortuneCard() {
                 <span className="text-4xl">✨</span>
                 <div className="text-center">
                   <p className="text-xs font-medium text-purple-500 mb-1">
-                    오늘의 운세
+                    오늘의 운세{" "}
+                    {isAiGenerated && (
+                      <span className="text-[10px] text-indigo-400">
+                        · AI가 방금 만들었어요
+                      </span>
+                    )}
                   </p>
                   <p className="text-sm text-gray-800 leading-relaxed">
                     {result.fortune}
@@ -141,7 +167,7 @@ export default function FortuneCard() {
         disabled={animating}
         className="px-8 py-3 rounded-full bg-gradient-to-r from-indigo-600 to-pink-500 text-white font-semibold shadow-lg hover:opacity-90 active:scale-95 transition disabled:opacity-60"
       >
-        {flipped ? "다시 뽑기" : "카드 뒤집기"}
+        {aiLoading ? "AI가 만드는 중..." : flipped ? "다시 뽑기" : "카드 뒤집기"}
       </button>
 
       {history.length > 0 && (
