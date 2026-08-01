@@ -1,7 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { generateFortune, type FortuneResult } from "@/lib/fortune";
+import { getClientId } from "@/lib/clientId";
+import {
+  fetchRecentDraws,
+  saveFortuneDraw,
+  type FortuneDraw,
+} from "@/lib/supabase/fortuneDraws";
 
 const LOTTO_COLORS = [
   { max: 10, className: "bg-yellow-400 text-yellow-950" },
@@ -19,6 +25,24 @@ export default function FortuneCard() {
   const [flipped, setFlipped] = useState(false);
   const [result, setResult] = useState<FortuneResult | null>(null);
   const [animating, setAnimating] = useState(false);
+  const [history, setHistory] = useState<FortuneDraw[]>([]);
+  const clientIdRef = useRef("");
+
+  useEffect(() => {
+    const id = getClientId();
+    clientIdRef.current = id;
+    if (id) {
+      fetchRecentDraws(id).then(setHistory);
+    }
+  }, []);
+
+  const persistDraw = (id: string, next: FortuneResult) => {
+    saveFortuneDraw(id, next).then((saved) => {
+      if (saved) {
+        setHistory((prev) => [saved, ...prev].slice(0, 5));
+      }
+    });
+  };
 
   const handleDraw = () => {
     if (animating) return;
@@ -28,14 +52,18 @@ export default function FortuneCard() {
       // Already showing a result: flip back first, then reveal a new one.
       setFlipped(false);
       window.setTimeout(() => {
-        setResult(generateFortune());
+        const next = generateFortune();
+        setResult(next);
         setFlipped(true);
         setAnimating(false);
+        if (clientIdRef.current) persistDraw(clientIdRef.current, next);
       }, 300);
     } else {
-      setResult(generateFortune());
+      const next = generateFortune();
+      setResult(next);
       setFlipped(true);
       window.setTimeout(() => setAnimating(false), 600);
+      if (clientIdRef.current) persistDraw(clientIdRef.current, next);
     }
   };
 
@@ -115,6 +143,32 @@ export default function FortuneCard() {
       >
         {flipped ? "다시 뽑기" : "카드 뒤집기"}
       </button>
+
+      {history.length > 0 && (
+        <div className="w-full max-w-xs">
+          <p className="text-xs font-medium text-gray-400 mb-2 text-center">
+            지난 기록
+          </p>
+          <ul className="space-y-1.5">
+            {history.map((h) => (
+              <li
+                key={h.id}
+                className="text-xs text-gray-500 bg-white/60 rounded-lg px-3 py-1.5 truncate"
+              >
+                <span className="text-gray-400">
+                  {new Date(h.created_at).toLocaleDateString("ko-KR", {
+                    month: "short",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </span>{" "}
+                · {h.fortune}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
