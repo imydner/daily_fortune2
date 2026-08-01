@@ -9,6 +9,7 @@ import {
   type FortuneDraw,
 } from "@/lib/supabase/fortuneDraws";
 import { getAiFortuneMessage } from "@/app/actions/aiFortune";
+import { getLuckyItemEmoji } from "@/lib/luckyItemEmoji";
 
 const LOTTO_COLORS = [
   { max: 10, className: "bg-yellow-400 text-yellow-950" },
@@ -129,9 +130,14 @@ export default function FortuneCard({
                   <p className="text-xs font-medium text-purple-500 mb-1">
                     행운의 아이템 &amp; 색상
                   </p>
-                  <p className="text-sm text-gray-800">
-                    {result.luckyItem} · {result.luckyColor}색
-                  </p>
+                  <div className="flex items-center justify-center gap-2">
+                    <span className="text-3xl" aria-hidden>
+                      {getLuckyItemEmoji(result.luckyItem)}
+                    </span>
+                    <p className="text-sm text-gray-800">
+                      {result.luckyItem} · {result.luckyColor}색
+                    </p>
+                  </div>
                 </div>
 
                 <div className="w-full h-px bg-gray-100" />
